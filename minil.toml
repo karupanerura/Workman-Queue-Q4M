@@ -1,0 +1,6 @@
+name = "Workman-Queue-Q4M"
+# badges = ["travis"]
+authority="cpan:KARUPA"
+
+module_maker="ModuleBuildTiny"
+
