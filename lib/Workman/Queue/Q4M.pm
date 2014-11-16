@@ -15,9 +15,24 @@ use SQL::Maker;
 use Workman::Job;
 use Workman::Request;
 
-sub _dbh {
+use constant DEFAULT_TIMEOUT => 10;
+
+sub new {
+    my $class = shift;
+    my $self  = $class->SUPER::new(@_);
+    $self->{timeout} ||= DEFAULT_TIMEOUT;
+    return $self;
+}
+
+sub can_wait_job { 0 }
+
+sub dbh {
     my $self = shift;
-    return $self->{_dbh} ||= DBIx::Sunny->connect(@{ $self->connect_info });
+    delete $self->{dbh} if exists $self->{owner_pid} && $self->{owner_pid} != $$;
+    return $self->{dbh} if exists $self->{dbh};
+
+    $self->{owner_pid} = $$;
+    return $self->{dbh} = DBIx::Sunny->connect(@{ $self->connect_info });
 }
 
 sub _sql_maker {
@@ -33,7 +48,7 @@ sub register_tasks {
 sub enqueue {
     my ($self, $name, $args) = @_;
     my ($sql, @bind) = $self->_sql_maker->insert($name, $args);
-    $self->_dbh->query($sql, @bind);
+    $self->dbh->query($sql, @bind);
     return Workman::Request->new(
         on_wait => sub {
             warn "[$$] Q4M hasn't support to wait result.";
@@ -49,24 +64,26 @@ sub dequeue {
         my $args = [@{ $self->task_names }];
         push @$args => $self->timeout if defined $self->timeout;
 
-        local $self->_dbh->{private_in_queue_wait} = 1;
-        $self->_dbh->select_one('SELECT queue_wait(?)', $args);
+        local $self->dbh->{private_in_queue_wait} = 1;
+        $self->dbh->select_one('SELECT queue_wait(?)', $args);
     } or return;
 
     my $name = $self->task_names->[$index - 1];
     my $sql  = sprintf 'SELECT * FROM `%s`', $name;
-    my $args = $self->_dbh->select_row($sql);
+    my $args = $self->dbh->select_row($sql);
     return Workman::Job->new(
         name    => $name,
         args    => $args,
         on_done => sub {
             my $result = shift;
             warn "[$$] Q4M hasn't support to send result." if defined $result;
-            $self->_dbh->select_one('SELECT queue_end()');
+            $self->dbh->select_one('SELECT queue_end()');
+        },
+        on_fail => sub {
+            $self->dbh->select_one('SELECT queue_end()');
         },
         on_abort => sub {
-            my $e = shift;
-            $self->_dbh->select_one('SELECT queue_abort()');
+            $self->dbh->select_one('SELECT queue_abort()');
         },
     );
 }

@@ -5,7 +5,7 @@ use utf8;
 
 use parent qw/Test::Builder::Module/;
 
-use DBI;
+use DBIx::Sunny;
 
 # copied and arranged from Queue::Q4M
 sub setup {
@@ -28,7 +28,7 @@ sub setup {
             { RaiseError => 1, AutoCommit => 1 }
         );
 
-        my $dbh = DBI->connect(@connect_info);
+        my $dbh = DBIx::Sunny->connect(@connect_info);
         for my $table (@tables) {
             $dbh->do(<<"            EOSQL");
             CREATE TABLE IF NOT EXISTS $table (
