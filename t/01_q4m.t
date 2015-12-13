@@ -9,7 +9,7 @@ use Workman::Test::Queue;
 
 my @connect_info = t::Util->setup(qw/Foo Bar/);
 END {
-    t::Util->cleanup(\@connect_info => [qw/Foo Bar/]);
+    t::Util->cleanup(\@connect_info => [qw/Foo Bar/]) if @connect_info;
 }
 
 my $queue = Workman::Queue::Q4M->new(connect_info => \@connect_info);
